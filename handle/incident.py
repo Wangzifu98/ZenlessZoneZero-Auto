@@ -10,8 +10,10 @@ from typing import Dict
 import numpy as np
 
 from schema import Position, info
-from utils import control, screenshot, logger
-from utils.task import task
+from utils import control, screenshot, logger, RootPath
+from pathlib import Path
+from utils.task import task, ImageMatch, find_template
+from PIL import Image
 from re import template
 from utils import config
 
@@ -32,6 +34,44 @@ def get_pos(text: str):
                 ]
             )
     return positions
+
+
+DownloadPath: Path = RootPath / "download"
+OptionImgPath = [
+    image_path
+    for image_path in DownloadPath.glob("*.png")
+    if "option" in image_path.stem or image_path.stem == "red_exit"
+]
+OptionImageMatch = [np.array(Image.open(image_path)) for image_path in OptionImgPath]
+
+
+# 通用事件点击 优先级最低
+@task.page(
+    name="通用点击事件",
+    priority=1,
+    target_texts=["背包", "^当前层数"],
+    target_image="tv_spot.png",
+)
+def action():
+    time.sleep(1)
+    screen = screenshot()  # 截图
+    if any(
+        find_template(screen, option_image_match)
+        for option_image_match in OptionImageMatch
+    ):
+        return
+    exclude_texts = ["特殊区域"]
+    exclude_texts = list(map(lambda x: template(x), exclude_texts))
+    results = task.ocr(screen)
+    if any(
+        exclude_text.search(result.text)
+        for exclude_text in exclude_texts
+        for result in results
+    ):
+        return
+    for y in range(640, 319, -40):
+        control.click(1050, y)
+        time.sleep(0.1)
 
 
 # 遇到确定就点击
@@ -84,9 +124,14 @@ def action(positions: Dict[str, Position]):
 
 
 # 5、邦布商人
-@task.page(name="邦布商人", target_texts=["^欢迎光临"])
+@task.page(name="邦布商人", target_texts=["^鸣徽交易$"])
 def action():
     control.click(1210, 35)
+
+
+# @task.page(name="邦布商人", target_texts=["^鸣徽催化$"])
+# def action():
+#     control.click(1210, 35)
 
 
 # # 6、防卫军后勤站
@@ -324,19 +369,6 @@ def action(positions: Dict[str, Position]):
     control.click(pos.x, pos.y)
 
 
-# 安全车厢
-@task.page(name="安全车厢_休息", target_texts=["^在列车中歇一歇$"])
-def action(positions: Dict[str, Position]):
-    pos = positions.get("^在列车中歇一歇$")
-    control.click(pos.x, pos.y)
-
-
-@task.page(name="安全车厢_修理", priority=4, target_texts=["^就修一下大门吧$"])
-def action(positions: Dict[str, Position]):
-    pos = positions.get("^就修一下大门吧$")
-    control.click(pos.x, pos.y)
-
-
 # 老练的调查员
 @task.page(name="老练的调查员", target_texts=["老练的调查员", "不用了"])
 def action(positions: Dict[str, Position]):
@@ -358,14 +390,8 @@ def action(positions: Dict[str, Position]):
     control.click(pos.x, pos.y)
 
 
-# 好感度系列
-@task.page(name="好感度_艾莲1", target_texts=["那休息一会儿$"])
+# 异化检疫门
+@task.page(name="异化检疫门", target_texts=["异化检疫门", "^强行闯入"])
 def action(positions: Dict[str, Position]):
-    pos = positions.get("那休息一会儿$")
-    control.click(pos.x, pos.y)
-
-
-@task.page(name="好感度_艾莲2", target_texts=["休息长一点也是为了更好地工作$", "醒醒"])
-def action(positions: Dict[str, Position]):
-    pos = positions.get("醒醒")
+    pos = positions.get("^强行闯入")
     control.click(pos.x, pos.y)
